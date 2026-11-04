@@ -76,7 +76,67 @@ ggplot(cleanrev_budget2013, aes(x = budget_2013)) + geom_boxplot()
 
 ```
 
-Now that data is cleaned, let's make a model
+Now that data is cleaned, let's make a model.
+
+```{r}
+# Linear regression model of the relationship between budget_2013 and domgross_2013, including the interaction of Bechdel test status (binary). 
+linear_regression_model <- lm(domgross_2013 ~ budget_2013 * binary,
+                            data = cleanrev_budget2013)
+summary(linear_regression_model)
+dev.off()
+plot(linear_regression_model)
+
+# Diagnostic plots are concerning, I think the outliers are really affecting the model. I will try and redo the model with data that excludes the positive outliers.
+```
+
+Cleaning data again: excluding values greater than Q3 + 1.5*IQR for both variables 
+
+```{r}
+#outlier threshold for budget_2013
+summary(movies$budget_2013)
+78337905 + 1.5*(78337905 - 16068918) #171741386
+summary(movies$domgross_2013)
+1.217e+08 + 1.5*(1.217e+08 - 2.055e+07) #273425000
+
+# clean the data again now, keeping data below these values
+cleanrev_budget2013 <- movies %>% 
+    filter(!is.na(domgross_2013), domgross_2013 < 273425000) %>%
+    filter(budget_2013 < 171741386) %>%
+    select(domgross_2013, budget_2013, binary)
+
+summary(cleanrev_budget2013)
+ggplot(cleanrev_budget2013, aes(x = domgross_2013)) + geom_histogram()
+ggplot(cleanrev_budget2013, aes(x = budget_2013)) + geom_histogram()
+# Distributions are still not normal. But going to make a model from this new cleaned data and then check assumptions.
+
+new_linear_regression <- lm(domgross_2013 ~ budget_2013 * binary,
+                            data = cleanrev_budget2013)
+summary(new_linear_regression)
+ggplot(cleanrev_budget2013, 
+        aes( x = budget_2013, y = domgross_2013, color = binary)) +
+        geom_point() +
+        geom_smooth(method = "lm")
+
+```
+
+Part B: Interpretation
+1) The coefficient for budget, as a description of the movies is 0.8134
+2) The coefficient for the interaction term is 0.0696, which is also the difference in the fitted lines between PASS/FAIL the Bechdel test. This means the model suggests that the slope for movies that pass the Bechdel test is 0.0696 higher than those that fail. 
+3) The model predicts that there is a $66,960 difference in the rate of change of domestic gross revenue between movies based on whether they pass or fail the Bechdel test. The p-value associated with the interaction of Bechdel test status is 0.326, which is not sufficient evidence to suggest that we reject the hypothesis that Bechdel test status has a significant interaction on budget and its relationship to domestic gross revenue. The p-value associated with the relationship between budget and gross revenue is very small, suggesting it could be significant, but we need to check the assumptions to make sure it is a valid model.
+
+Part C: Diagnostic Plots
+
+```{r}
+par(mfrow = c(2, 2))
+plot(new_linear_regression)
+
+```
+
+Normality: Looking at the Q-Q Residual plot, we can see that a large amount of the points fall off of the line, giving reason to suggest that there is not normality. 
+Constant Variance: The Residuals vs. Fitted Plot shows what looks like it could be a random scatter around 0, though with lower fitted values the residuals are definitely more tightly clustered around 0, while in higher fitted values they are a bit more spread out. This could also have to do just with the higher number of smaller values in the dataset.
+Influential Points: There are a lot of points with really high leverage, which was a concern I had from the beginning.
+
+I don't think the model assumptions are reasonably met for this comparison. A different type of model might be needed or even more of the extreme values need to be excluded from the dataset for analysis. I also don't think the fitted lines separating the data into PASS/FAIL are good representations of the data. The data is super scattered and the lines imply a much stronger relationship than I think our model summary showed us.
 
 # Section 2: Logistic Regression
 # Section 3: Comprehensive Analysis
