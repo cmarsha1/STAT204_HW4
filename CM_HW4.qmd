@@ -1,0 +1,83 @@
+---
+title: "HW 4 - Carmen Marshall"
+format: html
+---
+
+# Load the Data
+
+```{r}
+library(tidyverse)
+install.packages("broom")
+install.packages("knitr")
+library(broom)
+library(knitr)
+
+movies <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-03-09/movies.csv',
+                          na = c("", "NA", "#N/A", "N/A"))
+glimpse(movies)
+
+# 1794 observations, 34 variables
+```
+
+# Section 1: Linear Regression
+Research Question: Among these movies, how does domestic gross revenue change with budget? Is that pattern different for movies that pass vs. fail the Bechdel test?
+
+    # Part A:
+Budget_2013 has 0 missing values. Domgross_2013 has 18 missing values.
+
+```{r}
+# Summary of Budget variable
+summary(movies$budget_2013)
+# mean = 55,464,608, median = 36,995,786
+# mean is very far from median, let's check the distribution in a histogram and boxplot
+ggplot(movies, aes(x = budget_2013)) + geom_histogram() 
+ggplot(movies, aes(x = budget_2013)) + geom_boxplot()
+# The distribution is skewed heavily to the right, shown by both the histogram and the boxplot. The boxplot is showing lots and lots of outliers.
+```
+
+```{r}
+# Summary of Domestic Gross Revenue variable
+summary(movies$domgross_2013)
+# mean = 9.517e+07, median = 5.599e+07
+# again, mean far from median. Highest grossing/budgeted movies must be skewing the distribution quite a bit
+ggplot(movies, aes(x = domgross_2013)) + geom_histogram() 
+ggplot(movies, aes(x = domgross_2013)) + geom_boxplot()
+# skewed to the right, lots of outliers 
+```
+
+```{r}
+# Quick look at Bechdel Test variable
+# 0 missing values
+table(movies$binary) 
+# 803 pass, 991 fail
+table(movies$clean_test)
+```
+
+```{r}
+# Try log-transforming the budget2013 and domgross2013 data to see if it's easier to see before we have to cut out super high outliers.
+ggplot(movies, aes(x = log10(budget_2013))) + geom_histogram()
+ggplot(movies, aes(x = log10(domgross_2013))) + geom_histogram()
+# These look a little better, but I might get rid of some of the highest values along with the NAs, because they exhibit too much leverage anyway. 
+```
+
+Cleaning the Data: remove NAs and extreme values 
+
+```{r}
+# Removing NAs from domgross_2013
+cleanrev_budget2013 <- movies %>% 
+    filter(!is.na(domgross_2013), domgross_2013 < 5e+08) %>%
+    filter(budget_2013 < 2.5e+08) %>%
+    select(domgross_2013, budget_2013, binary)
+summary(cleanrev_budget2013)
+ggplot(cleanrev_budget2013, aes(x = domgross_2013)) + geom_boxplot()
+ggplot(cleanrev_budget2013, aes(x = budget_2013)) + geom_boxplot()
+
+# Looks a little better, going to proceed with this for now, looking at movies with a domestic gross revenue under 500 million dollars and budget under 250 million dollars. Hopefully this will result in the models fitting a little better with less extreme values that may cause it to overfit these really expensive values. And we want to get a general picture of the relationship between budget and revenue, not predicting whether a super high budget will produce a really high revenue.
+
+```
+
+Now that data is cleaned, let's make a model
+
+# Section 2: Logistic Regression
+# Section 3: Comprehensive Analysis
+# Section 4: Same Data, Different Goals
