@@ -54,89 +54,111 @@ table(movies$clean_test)
 ```
 
 ```{r}
-# Try log-transforming the budget2013 and domgross2013 data to see if it's easier to see before we have to cut out super high outliers.
-ggplot(movies, aes(x = log10(budget_2013))) + geom_histogram()
-ggplot(movies, aes(x = log10(domgross_2013))) + geom_histogram()
-# These look a little better, but I might get rid of some of the highest values along with the NAs, because they exhibit too much leverage anyway. 
+# Try log-transforming the budget2013 and domgross2013 data to see if the distribution becomes a little more balanced.
+ggplot(movies, aes(x = log(budget_2013))) + geom_histogram()
+ggplot(movies, aes(x = log(domgross_2013))) + geom_histogram()
+# The log transformation makes the distributions look a little more Normal, though both variables still have some pretty extreme outliers. However, I think it is okay to proceed with making a model using the log-transformed data, I will just make sure to remain a little skeptical of the output/accuracy of the model.
 ```
 
-Cleaning the Data: remove NAs and extreme values 
+Cleaning the Data: remove NAs 
 
 ```{r}
 # Removing NAs from domgross_2013
-cleanrev_budget2013 <- movies %>% 
-    filter(!is.na(domgross_2013), domgross_2013 < 5e+08) %>%
-    filter(budget_2013 < 2.5e+08) %>%
-    select(domgross_2013, budget_2013, binary)
-summary(cleanrev_budget2013)
-ggplot(cleanrev_budget2013, aes(x = domgross_2013)) + geom_boxplot()
-ggplot(cleanrev_budget2013, aes(x = budget_2013)) + geom_boxplot()
+movies <- movies %>% 
+    filter(!is.na(domgross_2013)) 
 
-# Looks a little better, going to proceed with this for now, looking at movies with a domestic gross revenue under 500 million dollars and budget under 250 million dollars. Hopefully this will result in the models fitting a little better with less extreme values that may cause it to overfit these really expensive values. And we want to get a general picture of the relationship between budget and revenue, not predicting whether a super high budget will produce a really high revenue.
-
+# It is with this data that I will proceed with making a model for linear regression. Depending on the fit of the model as well as the diagnostic plots, I might repeat the modeling process after removing some extreme outliers to combat overfitting if that appears to be present.
 ```
 
 Now that data is cleaned, let's make a model.
 
 ```{r}
 # Linear regression model of the relationship between budget_2013 and domgross_2013, including the interaction of Bechdel test status (binary). 
-linear_regression_model <- lm(domgross_2013 ~ budget_2013 * binary,
-                            data = cleanrev_budget2013)
+linear_regression_model <- lm(log(domgross_2013) ~ log(budget_2013) * binary,
+                            data = movies)
 summary(linear_regression_model)
-dev.off()
-plot(linear_regression_model)
 
-# Diagnostic plots are concerning, I think the outliers are really affecting the model. I will try and redo the model with data that excludes the positive outliers.
+# Coefficients for this model are:
+# log(budget_2013): 0.77898
+# binaryPASS: -0.95063
+# log(budget_2013):binaryPASS: 0.05204
+
+# The first coefficient tells us that in groups that fail the Bechdel test, a 1% increase in budget is associated with a 0.779% increase in domestic gross revenue.
+
+# Coefficient interaction term is 0.05204, meaning that the rate of change in domestic gross revenue as it is related to budget is 0.05% higher for movies that pass the Bechdel test than those that fail the test.
+
+# The only p value that is significant in the output of this model is for log(budget_2013), suggesting budget might have a strong relationship with the outcome of domestic gross revenue. 
 ```
 
-Cleaning data again: excluding values greater than Q3 + 1.5*IQR for both variables 
+```{r}
+# Plot of the relationship between budget_2013 and domgross_2013, with two fitted lines for the Bechdel test factors
+ggplot(movies, 
+        aes(x = log(budget_2013), y = log(domgross_2013), color = binary)) +
+        geom_point() +
+        geom_smooth(method = "lm")
+```
 
+```{r}
+# Run diagnostic plots for the model
+dev.off()
+par(mfrow = c(2,2))
+plot(linear_regression_model)
+```
+
+
+What happens to the model when we remove the outliers from each variable?
 ```{r}
 #outlier threshold for budget_2013
 summary(movies$budget_2013)
 78337905 + 1.5*(78337905 - 16068918) #171741386
+
+#outlier threshold
 summary(movies$domgross_2013)
 1.217e+08 + 1.5*(1.217e+08 - 2.055e+07) #273425000
 
 # clean the data again now, keeping data below these values
-cleanrev_budget2013 <- movies %>% 
+no_outliers <- movies %>% 
     filter(!is.na(domgross_2013), domgross_2013 < 273425000) %>%
     filter(budget_2013 < 171741386) %>%
     select(domgross_2013, budget_2013, binary)
 
-summary(cleanrev_budget2013)
-ggplot(cleanrev_budget2013, aes(x = domgross_2013)) + geom_histogram()
-ggplot(cleanrev_budget2013, aes(x = budget_2013)) + geom_histogram()
-# Distributions are still not normal. But going to make a model from this new cleaned data and then check assumptions.
+summary(no_outliers)
+ggplot(no_outliers, aes(x = log(domgross_2013))) + geom_histogram()
+ggplot(no_outliers, aes(x = log(budget_2013))) + geom_histogram()
+# Honestly, the distributions do not look that much different. Will make a model to see if the outputs change drastically (e.g., changes in significance of the variables)
+```
 
-new_linear_regression <- lm(domgross_2013 ~ budget_2013 * binary,
-                            data = cleanrev_budget2013)
-summary(new_linear_regression)
-ggplot(cleanrev_budget2013, 
-        aes( x = budget_2013, y = domgross_2013, color = binary)) +
+```{r}
+no_outlier_regression <- lm(log(domgross_2013) ~ log(budget_2013) * binary,
+                            data = no_outliers)
+summary(no_outlier_regression)
+
+# Coefficients:
+# log(budget_2013): 0.7521
+# binaryPASS: -0.59209
+# log(budget_2013): binaryPASS: 0.03619
+
+ggplot(no_outliers, 
+        aes(x = log(budget_2013), y = log(domgross_2013), color = binary)) +
         geom_point() +
         geom_smooth(method = "lm")
 
+# The coefficients in this new model are not super different from the ones from the previous model. Also, the only variable that is suggested to be significant in the new model is budget_2013, which is the same as the first model. It was good to try and remove the outliers from the data for the model, but I think output suggests that the outliers are not affecting the model that much and that we can interpret the output from the first linear regression model. 
 ```
 
-Part B: Interpretation
-1) The coefficient for budget, as a description of the movies is 0.8134
-2) The coefficient for the interaction term is 0.0696, which is also the difference in the fitted lines between PASS/FAIL the Bechdel test. This means the model suggests that the slope for movies that pass the Bechdel test is 0.0696 higher than those that fail. 
-3) The model predicts that there is a $66,960 difference in the rate of change of domestic gross revenue between movies based on whether they pass or fail the Bechdel test. The p-value associated with the interaction of Bechdel test status is 0.326, which is not sufficient evidence to suggest that we reject the hypothesis that Bechdel test status has a significant interaction on budget and its relationship to domestic gross revenue. The p-value associated with the relationship between budget and gross revenue is very small, suggesting it could be significant, but we need to check the assumptions to make sure it is a valid model.
+# Part B: Interpretation
+1) The coefficient for budget, as a description of these movies is 0.77898. This means that given that a movie does not pass the Bechdel test, for every 1% increase in movie budget, domestic gross revenue is expected to increase 0.778%. The rate of change is in percentage because the model was created with log-transformed data. 
+2) The coeffcient for the interaction term is 0.05204. This means that the rate of change in domestic gross revenue as it is related to budget is 0.05% higher for movies that pass the Bechdel test than those that fail the test.
+3) The F-statistic generated from the model is associated with a pvalue of 2.2e-16, suggesting that at least one factor built into this model is producing a significant effect on the response variable, domestic gross revenue. From the model output we can see that this factor is likely budget, which has a larger standardized t value and a significant p value, while the interaction term and coefficient for binaryPASS alone are not significant in this model. Therefore I conclude that budget probably does have some kind of effect on domestic gross revenue (which lines up with what I generally know about the movie industry), but that whether a movie passes or fails the Bechdel test likely does not have a significant effect on domestic gross revenue.
 
-Part C: Diagnostic Plots
+# Part C: Diagnostic Plots 
+Normality: The Q-Q plot shows us that a majority of the points lie on the line, which indicates normality. At the tails, the points do start to fall off the line, but because the majority in the center of the distribution lay flat on the line, there can be a reasonable assumption that the data has normality. 
 
-```{r}
-par(mfrow = c(2, 2))
-plot(new_linear_regression)
+Constant Variance: Looking at the Residuals vs. Fitted plot, the residuals seem to be generally randomly scattered around the 0 line, suggesting there is reason to assume the data has constant variance.
 
-```
+I think we can conclude that the model assumptions are reasonably met for this comparison. I would definitely still remain pretty skeptical of its overall fit and accuracy because there are a lot of extreme values. I also probably wouldn't use this model to predict gross revenue for new movies, but I think it can be helpful to describe the general trend/relationship between movie budget and revenue.
 
-Normality: Looking at the Q-Q Residual plot, we can see that a large amount of the points fall off of the line, giving reason to suggest that there is not normality. 
-Constant Variance: The Residuals vs. Fitted Plot shows what looks like it could be a random scatter around 0, though with lower fitted values the residuals are definitely more tightly clustered around 0, while in higher fitted values they are a bit more spread out. This could also have to do just with the higher number of smaller values in the dataset.
-Influential Points: There are a lot of points with really high leverage, which was a concern I had from the beginning.
 
-I don't think the model assumptions are reasonably met for this comparison. A different type of model might be needed or even more of the extreme values need to be excluded from the dataset for analysis. I also don't think the fitted lines separating the data into PASS/FAIL are good representations of the data. The data is super scattered and the lines imply a much stronger relationship than I think our model summary showed us.
 
 # Section 2: Logistic Regression
 # Section 3: Comprehensive Analysis
