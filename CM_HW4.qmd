@@ -161,5 +161,35 @@ I think we can conclude that the model assumptions are reasonably met for this c
 
 
 # Section 2: Logistic Regression
-# Section 3: Comprehensive Analysis
-# Section 4: Same Data, Different Goals
+
+Research Question: What movie characteristics predict passing the Bechdel test?
+
+# Part A: Model Fitting
+fitting a logistic model that predicts Bechdel test oucome from budget_2013, year, and IMDB rating
+
+```{r}
+# Create a binary outcome (0/1) from the "binary" variable
+movies$binary <- ifelse(movies$binary == "PASS", 1, 0)
+# Add columms changing the units to per million dollars of budget, and change from year to decade
+
+
+# Create a logistic regression model 
+model <- glm(binary ~ budget_2013 + year + imdb_rating, data = movies, family = "binomial")
+summary(model)
+exp(coef(model)) # calculates the odds ratio
+```
+
+Coefficients
+budget: -6.617e-09, odds ratio: either extremely close to 1 or 1
+year: 0.01786, oddds ratio: 1.018
+imdb rating: -0.2959, odds ratio: 0.7439
+
+the log odds change by the Beta, whcih is the coefficients associated with each variable in the output
+odds of outcome multiply by the odds ratio
+
+
+```{r}
+# create 95% confidence intervals
+exp(confint(model))
+confintervals_table <- tidy(model, conf.int = TRUE, exponentiate = TRUE) # exponentiate turns the log odds into the odds ratios for the table
+```
