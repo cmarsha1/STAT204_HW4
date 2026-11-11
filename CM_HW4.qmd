@@ -215,6 +215,8 @@ ggplot(movies,
         geom_smooth(method = "glm")
 ```
 
+to gt fitted probabilities, use predict(model, newdata, type = "response"
+
 # Question 3: Comprehensive Analysis
 Research Question: Among the movies in this dataset, does the relationship between budget and revenue look different across MPAA ratings?
 
