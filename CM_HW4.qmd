@@ -1,16 +1,14 @@
 ---
 title: "HW 4 - Carmen Marshall"
 format: html
+code-fold: true
 ---
 
 # Load the Data
 
 ```{r}
 library(tidyverse)
-install.packages("broom")
-install.packages("knitr")
 library(broom)
-library(knitr)
 
 movies <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-03-09/movies.csv',
                           na = c("", "NA", "#N/A", "N/A"))
@@ -78,6 +76,8 @@ linear_regression_model <- lm(log(domgross_2013) ~ log(budget_2013) * binary,
                             data = movies)
 summary(linear_regression_model)
 
+# Model uses 1776 observations of movies
+
 # Coefficients for this model are:
 # log(budget_2013): 0.77898
 # binaryPASS: -0.95063
@@ -103,6 +103,7 @@ ggplot(movies,
 dev.off()
 par(mfrow = c(2,2))
 plot(linear_regression_model)
+# interpretation of these plots is in Part C
 ```
 
 
@@ -133,6 +134,8 @@ no_outlier_regression <- lm(log(domgross_2013) ~ log(budget_2013) * binary,
                             data = no_outliers)
 summary(no_outlier_regression)
 
+# Model uses 1591 observations for movies
+
 # Coefficients:
 # log(budget_2013): 0.7521
 # binaryPASS: -0.59209
@@ -161,24 +164,27 @@ I think we can conclude that the model assumptions are reasonably met for this c
 
 
 # Section 2: Logistic Regression
-
 Research Question: What movie characteristics predict passing the Bechdel test?
 
 # Part A: Model Fitting
-fitting a logistic model that predicts Bechdel test oucome from budget_2013, year, and IMDB rating
+fitting a logistic model that predicts Bechdel test outcome from budget_2013, year, and IMDB rating
 
 ```{r}
 # Create a binary outcome (0/1) from the "binary" variable
-movies$binary <- ifelse(movies$binary == "PASS", 1, 0)
+movies <- movies %>%
+    mutate(binary_logical = ifelse(movies$binary == "PASS", 1, 0))
+
 # Add columms changing the units to per million dollars of budget, and change from year to decade
 movies <- movies %>%
     mutate(budget_millions = budget_2013 / 1000000,
     decade = year / 10)
 
 # Create a logistic regression model 
-model <- glm(binary ~ budget_millions + decade + imdb_rating, data = movies, family = "binomial")
+model <- glm(binary_logical ~ budget_millions + decade + imdb_rating, data = movies, family = "binomial")
 summary(model)
 exp(coef(model)) # calculates the odds ratio
+
+# Model uses 1776 observations of movies
 ```
 
 Coefficients (using millions of dollars as units and decade)
@@ -210,12 +216,27 @@ For every $1 million increase in budget, the odds of a movie passing the Bechdel
 # Part C: Fitted Probabilities and Visualization
 
 ```{r}
-ggplot(movies, 
-        aes(x = year, y = binary)) +
-        geom_smooth(method = "glm")
+logmodelpredict <- glm(binary_logical ~ budget_2013 + year + imdb_rating, data = movies, family = "binomial")
+# creates new logistic regression model that uses original budget and year variables, instead of millions and decade
+# Model uses 1776 observations of movies
+
+bechdel_probability <- data.frame(year = seq(min(movies$year, na.rm = TRUE), max(movies$year, na.rm = TRUE), 
+    length.out = 43), budget_2013 = mean(movies$budget_2013, na.rm = TRUE), imdb_rating = mean(movies$imdb_rating, na.rm = TRUE))
+# creates a data frame that has each year movies from this dataset were released, and holds budget and imdb_rating at their means so we can look at probability of bechdel test status ONLY over change in time.
+
+bechdel_probability$predictions <- predict(logmodelpredict, newdata = bechdel_probability, type = "response")
+# Creates prediction from that data frame and our logistic regression model, generating probabiities as the predictions
+
+
+ggplot(bechdel_probability, aes(x = year, y = predictions)) +
+    geom_line(color = "steelblue") +
+    labs(x = "Year", y = "Probability of Passing the Bechdel Test")
+# Plots the year on x axis and probabilities on the y axis, line represents change in probability over time
 ```
 
 to gt fitted probabilities, use predict(model, newdata, type = "response"
+calcuate the probabilities for each movie, and plot them
+model output gives you the log odds
 
 # Question 3: Comprehensive Analysis
 Research Question: Among the movies in this dataset, does the relationship between budget and revenue look different across MPAA ratings?
@@ -244,6 +265,8 @@ movies_clean$rated <- as.factor(movies_clean$rated)
 model_budrevrating <- lm(log(domgross_2013) ~ log(budget_2013) * rated, data = movies_clean)
 summary(model_budrevrating)
 
+#Model uses 1538 observations of movies
+
 ggplot(movies_clean,
         aes(x = log(budget_2013), y = log(domgross_2013), color = rated)) +
             geom_point()+
@@ -261,6 +284,9 @@ movies_nog <- movies_clean %>%
       filter(rated %in% c("PG", "PG-13", "R"))
 
 model_nog <- lm(log(domgross_2013) ~ log(budget_2013) * rated, data = movies_nog)
+
+# Model uses 1502 observations of movies 
+
 summary(model_nog)
 ggplot(movies_nog,
         aes(x = log(budget_2013), y = log(domgross_2013), color = rated)) +
