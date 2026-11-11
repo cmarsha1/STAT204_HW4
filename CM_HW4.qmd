@@ -171,18 +171,21 @@ fitting a logistic model that predicts Bechdel test oucome from budget_2013, yea
 # Create a binary outcome (0/1) from the "binary" variable
 movies$binary <- ifelse(movies$binary == "PASS", 1, 0)
 # Add columms changing the units to per million dollars of budget, and change from year to decade
-
+movies <- movies %>%
+    mutate(budget_millions = budget_2013 / 1000000,
+    decade = year / 10)
 
 # Create a logistic regression model 
-model <- glm(binary ~ budget_2013 + year + imdb_rating, data = movies, family = "binomial")
+model <- glm(binary ~ budget_millions + decade + imdb_rating, data = movies, family = "binomial")
 summary(model)
 exp(coef(model)) # calculates the odds ratio
 ```
 
-Coefficients
-budget: -6.617e-09, odds ratio: either extremely close to 1 or 1
-year: 0.01786, oddds ratio: 1.018
+Coefficients (using millions of dollars as units and decade)
+budget_millions: -0.0066, odds ratio: 0.9934
+decade: 0.1786, oddds ratio: 1.1956
 imdb rating: -0.2959, odds ratio: 0.7439
+
 
 the log odds change by the Beta, whcih is the coefficients associated with each variable in the output
 odds of outcome multiply by the odds ratio
@@ -193,3 +196,94 @@ odds of outcome multiply by the odds ratio
 exp(confint(model))
 confintervals_table <- tidy(model, conf.int = TRUE, exponentiate = TRUE) # exponentiate turns the log odds into the odds ratios for the table
 ```
+
+```{r}
+# Calculating Percent Change by Effect of Each Variable
+print(paste("Percent change:", round((0.9934-1)*100, 2), "%")) # budget_millions 
+print(paste("Percent change:", round((1.1956-1)*100, 2), "%")) # decade
+print(paste("Percent change:", round((0.7439-1)*100, 2), "%")) # imdb rating
+```
+
+# Part B: Interpretation
+For every $1 million increase in budget, the odds of a movie passing the Bechdel test decreases by 0.66%, which is a pretty negligible change and suggests budget does not have a significant effect on changing the odds of a movie passing or failing the Bechdel test. For every decade that passes, the odds of a movie passing the Bechdel test increases by 19.56%, which might suggest a significant effect. Lastly, for every 1-point increase in IMDB rating, the odds of a movie passing the Bechdel test decreases by 25.61%, which suggests an even stronger effect than release decade. According to this logistic regression, IMDB rating seems to have the strongest effect on the odds of a movie passing or failing the Bechdel test.
+
+# Part C: Fitted Probabilities and Visualization
+
+```{r}
+ggplot(movies, 
+        aes(x = year, y = binary)) +
+        geom_smooth(method = "glm")
+```
+
+# Question 3: Comprehensive Analysis
+Research Question: Among the movies in this dataset, does the relationship between budget and revenue look different across MPAA ratings?
+
+```{r}
+# Looking at "rated" variable
+table(movies$rated)
+# variable includes ratings such as NC-17, NR, TV-14, TV-PG, Unrated, and X. But we are only looking at G, PG, PG-13, and R. So we will drop all those others. There are also 207 NAs, we will drop those too. Dropping 207 NAs and 31 rows with other ratings.
+
+# quick look at the distribution across factors of this variable
+movies %>%
+    filter(!is.na(rated)) %>%
+    filter(rated %in% c("G", "PG", "PG-13", "R")) %>%
+    ggplot(., aes(x = rated)) + geom_bar()
+
+# Here we see that movies rated R and PG-13 have the highest frequency in this dataset.
+
+# make subsetted data with NAs and other ratings removed, to use for linear regression model
+movies_clean <- movies %>% 
+    filter(!is.na(rated)) %>%
+    filter(rated %in% c("G", "PG", "PG-13", "R"))
+
+movies_clean$rated <- as.factor(movies_clean$rated)
+
+# code to generate model, looking at relationship b/w budget and revenue, with an interaction of MPAA rating
+model_budrevrating <- lm(log(domgross_2013) ~ log(budget_2013) * rated, data = movies_clean)
+summary(model_budrevrating)
+
+ggplot(movies_clean,
+        aes(x = log(budget_2013), y = log(domgross_2013), color = rated)) +
+            geom_point()+
+            geom_smooth(method = "lm") +
+            labs(x = "Log(Movie Budget) ($)", y = "Log(Domestic Gross Revenue) ($)", title = "Interaction of MPAA Ratings on the Relationship Between Movie Budget and Domestic Gross Revenue") +
+            theme(plot.title = element_text(size = 10)) +
+            labs(caption = "Note: variables 2013-adjusted and log transformed")
+# Model output summary tells us that at least one variable in this model has a significant effect on the relationship between budget and revenue. The Beta1 for log(budget_2013), given that the MPAA rating is G, shows that for every 1% increase in budget_2013, domgross_2013 increases by 0.57%. The p value associated with this is 0.015, suggesting significance. The other interaction levels do not seem to be significant. There is not enough evidence to suggest that changing the MPAA rating of a movie has any effect on the relationship between budget and domestic gross revenue.
+```
+
+
+```{r}
+# Does the pattern change when we get rid of G rated movies?
+movies_nog <- movies_clean %>%
+      filter(rated %in% c("PG", "PG-13", "R"))
+
+model_nog <- lm(log(domgross_2013) ~ log(budget_2013) * rated, data = movies_nog)
+summary(model_nog)
+ggplot(movies_nog,
+        aes(x = log(budget_2013), y = log(domgross_2013), color = rated)) +
+            geom_point()+
+            geom_smooth(method = "lm") +
+            labs(x = "Log(Movie Budget) ($)", y = "Log(Domestic Gross Revenue) ($)", title = "Interaction of MPAA Ratings on the Relationship Between Movie Budget and Domestic Gross Revenue") +
+            theme(plot.title = element_text(size = 10)) +
+            labs(caption = "Note: variables 2013-adjusted and log transformed")
+# This model output shows us something a lot different. The p-values associated with the effect of each of the interaction terms suggest that their effect on the relationship between budget and revenue is significant. This should make us doubt the stability of our first model, which had a vastly different conclusion.
+par(mfrow = c(2,2))
+plot(model_budrevrating)
+plot(model_nog)
+```
+
+Findings
+I used a linear regression model to examine the relationship between movie budget, domestic gross revenue, and the interaction of movies' MPAA ratings. The first model, which included G ratings along with PG, PG13, and R, suggested that changing the MPAA rating of the movie would not have a significant effect on the relationship that budget has to revenue. However, when we excluded the 36 G-rated movies from the dataset and created a second model, we got very different results. The model output showed us that changing the movie MPAA rating to any of the ratings (PG, PG13, R) posed a significant effect on the relationship between budget and revenue. This leads me to wonder about the stability of the model, and if answering this question with only this data would be valid. These G-rated movies, though a small number, might have really different budgets or have low budget but super high revenue or vice versa. Since the diagnostic plots for both models do not look concerning, I think the issue with the model might have to do with some other issue in the data. 
+
+# Question 4: Same Data, Different Goals
+Answering for Question 1
+a) Inference: the population could be movies that were released within the interval of years that this dataset possesses, and for those movies that the data for budget, domestic gross revenue, and whether it passes the Bechdel test are available to put into the model. I did exclude 18 observations from the data because they were missing data for domestic gross revenue. It is also important to note that movies that have not posted their financial information would not be able to be represented in this model, and this occurrence might be more prevalent among certain types of movies, perhaps those that didn't perform as well. For assumptions, I would check for independence (the financial success of the first movie in the series might increase the budget of the sequel), as well as the normality of residuals (I remember the data looked a little skewed before log-transforming). And like earlier, I would check for really extreme outliers.
+
+b) Prediction: Ideally, the prediction would be made before the movie is released, but there is the issue of obtaining whether a movie passes the Bechdel test or not. We would either have to wait until the movie is released to watch it, but not look at the revenue, or be able to access the Bechdel test result after the movie is finished but before its release. Hopefully movie budget would be available but I am not sure when that data gets released, similarly with the Bechdel test. I would still use a linear regression model because we are looking at continuous outcomes. To measure how well the model predicts, I would do cross-validation to estimate prediction error, so we can look at the RMSE, Rsquared, and the MAE from that cross validation output. 
+I would report the following:
+- variables we used in the model (budget, domestic gross revenue, Bechdel test results)
+- the coefficients and p values we received in the model output
+- procedure for cross validation (how many folds we used to train and test the model)
+- values for RMSE, MAE, and Rsquared
+- general conclusions on the fit and prediction accuracy of the model
