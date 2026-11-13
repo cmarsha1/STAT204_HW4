@@ -193,7 +193,7 @@ decade: 0.1786, oddds ratio: 1.1956
 imdb rating: -0.2959, odds ratio: 0.7439
 
 
-the log odds change by the Beta, whcih is the coefficients associated with each variable in the output
+the log odds change by the Beta, which is the coefficients associated with each variable in the output
 odds of outcome multiply by the odds ratio
 
 
@@ -224,19 +224,22 @@ bechdel_probability <- data.frame(year = seq(min(movies$year, na.rm = TRUE), max
     length.out = 43), budget_2013 = mean(movies$budget_2013, na.rm = TRUE), imdb_rating = mean(movies$imdb_rating, na.rm = TRUE))
 # creates a data frame that has each year movies from this dataset were released, and holds budget and imdb_rating at their means so we can look at probability of bechdel test status ONLY over change in time.
 
-bechdel_probability$predictions <- predict(logmodelpredict, newdata = bechdel_probability, type = "response")
-# Creates prediction from that data frame and our logistic regression model, generating probabiities as the predictions
+bechpredictions <- predict(logmodelpredict, newdata = bechdel_probability, type = "link", se.fit = TRUE)
+# Creates predictions from that data frame and our logistic regression model, generating log odds as the predictions, as well as calculating the standard error which we can use for calculating the confidence intervals.
 
+bechdel_probability <- bechdel_probability %>% # adds columns that create 1) probabilities calculated from log odds, and 95% confidence intervals using the standard error from the predictions
+    mutate(probs = plogis(bechpredictions$fit),
+            confinterval.low = plogis(bechpredictions$fit - 1.96*bechpredictions$se.fit), # 1.96 is the z score for 95% CI
+            confinterval.high = plogis(bechpredictions$fit + 1.96*bechpredictions$se.fit))
 
-ggplot(bechdel_probability, aes(x = year, y = predictions)) +
-    geom_line(color = "steelblue") +
+ggplot(bechdel_probability, aes(x = year, y = probs)) +
+    geom_ribbon(aes(ymin = confinterval.low, ymax = confinterval.high), alpha = 0.3) +
+    geom_line(color = "steelblue", size = 1) +
     labs(x = "Year", y = "Probability of Passing the Bechdel Test")
 # Plots the year on x axis and probabilities on the y axis, line represents change in probability over time
 ```
 
-to gt fitted probabilities, use predict(model, newdata, type = "response"
-calcuate the probabilities for each movie, and plot them
-model output gives you the log odds
+The trend of this graph shows that generally, over time, the probability of a given movie from this dataset passing the Bechdel test seems to increase as year increases on the x-axis. We can expect that over time, newer released movies may have a higher probability of passing the Bechdel test.
 
 # Question 3: Comprehensive Analysis
 Research Question: Among the movies in this dataset, does the relationship between budget and revenue look different across MPAA ratings?
